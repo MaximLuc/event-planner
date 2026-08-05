@@ -39,5 +39,16 @@ uploads/
 .DS_Store
 Thumbs.db
 
-# Obsidian local workspace state
+# Generated Prisma Client
+apps/api/src/generated/prisma/
+
+# Local AI assistant files installed with Prisma tooling
+apps/api/.agents/
+apps/api/.claude/
+apps/api/.windsurf/
+apps/api/skills-lock.json
+
+# Obsidian local workspace state (documentation itself is committed)
 event-planner-docs
+
+apps/api/prisma
