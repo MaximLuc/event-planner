@@ -16,6 +16,8 @@ import * as Joi from 'joi';
           .valid('development', 'test', 'production')
           .default('development'),
         DATABASE_URL: Joi.string().uri().required(),
+        JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+        JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
       }),
     }),
     HealthModule,
