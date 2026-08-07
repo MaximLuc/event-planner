@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { SessionsModule } from './sessions/sessions.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -18,12 +19,18 @@ import * as Joi from 'joi';
         DATABASE_URL: Joi.string().uri().required(),
         JWT_ACCESS_SECRET: Joi.string().min(32).required(),
         JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
+        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+        JWT_REFRESH_TTL_SECONDS: Joi.number()
+          .integer()
+          .positive()
+          .default(2592000),
       }),
     }),
     HealthModule,
     DatabaseModule,
     UsersModule,
     AuthModule,
+    SessionsModule,
   ],
 })
 export class AppModule {}
