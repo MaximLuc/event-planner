@@ -36,18 +36,24 @@ export class SessionsService {
     });
   }
 
-  rotate(sessionId: string, refreshTokenHash: string, expiresAt: Date) {
+  rotate(
+    sessionId: string,
+    currentRefreshTokenHash: string,
+    newRefreshTokenHash: string,
+    newExpiresAt: Date,
+  ) {
     return this.prisma.session.updateMany({
       where: {
         id: sessionId,
+        refreshTokenHash: currentRefreshTokenHash,
         revokedAt: null,
         expiresAt: {
           gt: new Date(),
         },
       },
       data: {
-        refreshTokenHash,
-        expiresAt,
+        refreshTokenHash: newRefreshTokenHash,
+        expiresAt: newExpiresAt,
       },
     });
   }

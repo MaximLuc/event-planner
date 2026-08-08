@@ -11,3 +11,9 @@ export type SessionMetadata = {
   userAgent?: string;
   ipAddress?: string;
 };
+
+export type RefreshTokenPayload = {
+  sub: string;
+  sid: string;
+  jti: string;
+};

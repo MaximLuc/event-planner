@@ -11,7 +11,10 @@ import { LoginDto } from './dto/login.dto/login.dto';
 import { createHash, randomUUID } from 'crypto';
 import { SessionsService } from '../sessions/sessions.service';
 import { ConfigService } from '@nestjs/config';
-import { SessionMetadata } from '../sessions/types/create-session-data.type';
+import {
+  RefreshTokenPayload,
+  SessionMetadata,
+} from '../sessions/types/create-session-data.type';
 
 @Injectable()
 export class AuthService {
@@ -47,14 +50,14 @@ export class AuthService {
   async login(dto: LoginDto, metadata: SessionMetadata) {
     const existingUser = await this.userService.findByEmail(dto.email);
     if (!existingUser) {
-      throw new UnauthorizedException('Invalid email or passwor');
+      throw new UnauthorizedException('Invalid email or password');
     }
     const isPasswordValid = await bcrypt.compare(
       dto.password,
       existingUser.passwordHash,
     );
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or passwor');
+      throw new UnauthorizedException('Invalid email or password');
     }
     const accessToken = await this.jwtService.signAsync({
       sub: existingUser.id,
@@ -73,6 +76,7 @@ export class AuthService {
       {
         sub: existingUser.id,
         sid: sessionId,
+        jti: randomUUID(),
       },
       {
         secret: refreshSecret,
@@ -126,5 +130,118 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  async refresh(refreshToken: string) {
+    const refreshSecret =
+      this.configService.getOrThrow<string>('JWT_REFRESH_SECRET');
+    let payload: RefreshTokenPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(
+        refreshToken,
+        {
+          secret: refreshSecret,
+        },
+      );
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const session = await this.sessionsService.findActiveById(payload.sid);
+
+    if (!session) {
+      throw new UnauthorizedException('Session is invalid or Expired');
+    }
+
+    const refreshTokenHash = this.hashToken(refreshToken);
+
+    if (
+      refreshTokenHash !== session?.refreshTokenHash ||
+      session.userId !== payload.sub
+    ) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    const user = await this.userService.findById(payload.sub);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      role: user.systemRole,
+    });
+
+    const refreshTtlSeconds = this.configService.getOrThrow<number>(
+      'JWT_REFRESH_TTL_SECONDS',
+    );
+    const newRefreshToken = await this.jwtService.signAsync(
+      {
+        sub: user.id,
+        sid: session.id,
+        jti: randomUUID(),
+      },
+      {
+        secret: refreshSecret,
+        expiresIn: refreshTtlSeconds,
+      },
+    );
+
+    const newRefreshTokenHash = this.hashToken(newRefreshToken);
+
+    const newExpiresAt = new Date(Date.now() + refreshTtlSeconds * 1000);
+
+    const rotationResult = await this.sessionsService.rotate(
+      session.id,
+      refreshTokenHash,
+      newRefreshTokenHash,
+      newExpiresAt,
+    );
+
+    if (rotationResult.count !== 1) {
+      throw new UnauthorizedException(
+        'Session is already refreshed or revoked',
+      );
+    }
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
+
+  async logout(refreshToken: string) {
+    const refreshSecret =
+      this.configService.getOrThrow<string>('JWT_REFRESH_SECRET');
+    let payload: RefreshTokenPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(
+        refreshToken,
+        {
+          secret: refreshSecret,
+        },
+      );
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const session = await this.sessionsService.findActiveById(payload.sid);
+    if (!session) {
+      return;
+    }
+
+    const refreshTokenHash = this.hashToken(refreshToken);
+
+    if (
+      refreshTokenHash !== session.refreshTokenHash ||
+      session.userId !== payload.sub
+    ) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    await this.sessionsService.revoke(session.id);
+  }
+
+  async loguotAll(userId: string): Promise<void> {
+    await this.sessionsService.revokeAllByUserId(userId);
   }
 }
