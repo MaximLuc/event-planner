@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SystemRole {
+  USER
+  ADMIN
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum EventVisibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+enum ParticipationPolicy {
+  OPEN_REGISTRATION
+  APPROVAL_REQUIRED
+  INVITE_ONLY
+}
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique
+  passwordHash    String     @map("password_hash")
+  name            String
+  systemRole      SystemRole @default(USER) @map("system_role")
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions    Session[]
+  ownedEvents Event[]   @relation("EventOwner")
+
+  @@map("users")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(3)
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Event {
+  id                  String              @id @default(uuid()) @db.Uuid
+  ownerId             String              @map("owner_id") @db.Uuid
+  title               String
+  slug                String              @unique
+  description         String?
+  status              EventStatus         @default(DRAFT)
+  visibility          EventVisibility     @default(PRIVATE)
+  participationPolicy ParticipationPolicy @default(INVITE_ONLY) @map("participation_policy")
+  capacity            Int?
+  startsAt            DateTime?           @map("starts_at") @db.Timestamptz(3)
+  endsAt              DateTime?           @map("ends_at") @db.Timestamptz(3)
+  timezone            String              @default("Europe/Moscow")
+  publishedAt         DateTime?           @map("published_at") @db.Timestamptz(3)
+  version             Int                 @default(1)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner User @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([status, visibility, startsAt])
+  @@map("events")
+}
