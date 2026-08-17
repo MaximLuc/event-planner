@@ -5,13 +5,6 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "argon2",
-      "@prisma/engines",
-      "prisma"
-    ]
-  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

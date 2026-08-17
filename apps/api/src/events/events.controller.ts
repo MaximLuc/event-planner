@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/types/jwt-payload.type';
 import { UpdateEventDto } from './dto/update-event.dto/update-event.dto';
 import { UpdateEventAccessDto } from './dto/update-event-access.dto/update-event-access.dto';
+import { PublishEventDto } from './dto/publish-event.dto/publish-event.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('events')
@@ -58,5 +59,14 @@ export class EventsController {
     @Body() dto: UpdateEventAccessDto,
   ) {
     return this.eventService.updateAccess(user.userId, eventId, dto);
+  }
+
+  @Post(':eventId/publish')
+  publishEvent(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Body() dto: PublishEventDto,
+  ) {
+    return this.eventService.publish(user.userId, eventId, dto);
   }
 }
