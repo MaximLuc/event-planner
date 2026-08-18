@@ -39,6 +39,30 @@ enum ParticipationPolicy {
   INVITE_ONLY
 }
 
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model EventRegistration {
+  id        String             @id @default(uuid()) @db.Uuid
+  eventId   String             @map("event_id") @db.Uuid
+  userId    String             @map("user_id") @db.Uuid
+  status    RegistrationStatus
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId, status])
+  @@map("event_registrations")
+}
+
 model User {
   id              String     @id @default(uuid()) @db.Uuid
   email           String     @unique
@@ -49,8 +73,9 @@ model User {
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions    Session[]
-  ownedEvents Event[]   @relation("EventOwner")
+  sessions           Session[]
+  ownedEvents        Event[]             @relation("EventOwner")
+  eventRegistrations EventRegistration[]
 
   @@map("users")
 }
@@ -91,7 +116,8 @@ model Event {
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner User @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner         User                @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  registrations EventRegistration[]
 
   @@index([ownerId])
   @@index([status, visibility, startsAt])
