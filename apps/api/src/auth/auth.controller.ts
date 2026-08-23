@@ -18,9 +18,22 @@ import { LoginDto } from './dto/login.dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard/jwt-auth.guard';
 import type { AuthenticatedUser } from './types/jwt-payload.type';
 import { CurrentUser } from './decorators/current-user/current-user.decorator';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 
 const REFRESH_TOKEN_COOKIE = 'refresh_token';
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -29,12 +42,21 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiCreatedResponse({ description: 'User registered successfully' })
+  @ApiBadRequestResponse({ description: 'Invalid registration data' })
+  @ApiConflictResponse({ description: 'Email is already registered' })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Log in and create a refresh session' })
+  @ApiOkResponse({
+    description: 'Access token returned; refresh token set in cookie',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid email or password' })
   async login(
     @Body() dto: LoginDto,
     @Req() request: Request,
@@ -54,12 +76,26 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get the current user profile' })
+  @ApiOkResponse({ description: 'Current user profile' })
+  @ApiUnauthorizedResponse({
+    description: 'Access token is missing or invalid',
+  })
   getMe(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.getProfile(user.userId);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth('refresh-cookie')
+  @ApiOperation({
+    summary: 'Rotate refresh token and issue a new access token',
+  })
+  @ApiOkResponse({ description: 'New access token returned' })
+  @ApiUnauthorizedResponse({
+    description: 'Refresh token is missing or invalid',
+  })
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -77,6 +113,9 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiCookieAuth('refresh-cookie')
+  @ApiOperation({ summary: 'Revoke the current refresh session' })
+  @ApiNoContentResponse({ description: 'Current session revoked' })
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -94,6 +133,12 @@ export class AuthController {
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Revoke all refresh sessions for the current user' })
+  @ApiNoContentResponse({ description: 'All sessions revoked' })
+  @ApiUnauthorizedResponse({
+    description: 'Access token is missing or invalid',
+  })
   async logoutAll(
     @CurrentUser() user: AuthenticatedUser,
     @Res({ passthrough: true }) response: Response,
