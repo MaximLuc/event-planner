@@ -379,4 +379,59 @@ export class RegistrationsService {
 
     throw new ConflictException('Application could not be processed');
   }
+
+  async findMyRegistrations(userId: string, query: EventRegistrationsQueryDto) {
+    const where: Prisma.EventRegistrationWhereInput = {
+      userId,
+      ...(query.status && {
+        status: query.status,
+      }),
+    };
+    const skip = (query.page - 1) * query.limit;
+    const [items, total] = await this.prismaService.$transaction([
+      this.prismaService.eventRegistration.findMany({
+        where,
+        orderBy: {
+          event: {
+            startsAt: 'asc',
+          },
+        },
+        skip,
+        take: query.limit,
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          event: {
+            select: {
+              title: true,
+              slug: true,
+              startsAt: true,
+              endsAt: true,
+              timezone: true,
+              status: true,
+              owner: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prismaService.eventRegistration.count({
+        where,
+      }),
+    ]);
+
+    return {
+      items,
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    };
+  }
 }
