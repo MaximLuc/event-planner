@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { EventsModule } from './events/events.module';
 import { RegistrationsModule } from './registrations/registrations.module';
+import { InvitationsModule } from './invitations/invitations.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -35,6 +36,7 @@ import * as Joi from 'joi';
     SessionsModule,
     EventsModule,
     RegistrationsModule,
+    InvitationsModule,
   ],
 })
 export class AppModule {}
