@@ -58,16 +58,17 @@ export function createPublishedInviteOnlyEvent(
   });
 }
 
-export function createPendingInvitation(
+export function createTestInvitation(
   prisma: PrismaService,
   eventId: string,
   invitedUserId: string,
+  status: InvitationStatus = InvitationStatus.PENDING,
 ) {
   return prisma.eventInvitation.create({
     data: {
       eventId,
       invitedUserId,
-      status: InvitationStatus.PENDING,
+      status: status,
     },
   });
 }
