@@ -8,6 +8,7 @@ import { SessionsModule } from './sessions/sessions.module';
 import { EventsModule } from './events/events.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { RedisCacheModule } from './cache/redis-cache.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -27,6 +28,7 @@ import * as Joi from 'joi';
           .integer()
           .positive()
           .default(2592000),
+        REDIS_URL: Joi.string().uri().required(),
       }),
     }),
     HealthModule,
@@ -37,6 +39,7 @@ import * as Joi from 'joi';
     EventsModule,
     RegistrationsModule,
     InvitationsModule,
+    RedisCacheModule,
   ],
 })
 export class AppModule {}

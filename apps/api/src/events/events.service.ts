@@ -14,10 +14,17 @@ import { UpdateEventAccessDto } from './dto/update-event-access.dto/update-event
 import { PublishEventDto } from './dto/publish-event.dto/publish-event.dto';
 import { PublicEventsQueryDto } from './dto/public-events-query.dto/public-events-query-dto';
 import { Prisma } from '../generated/prisma/client';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    @Inject(CACHE_MANAGER)
+    private readonly cacheManager: Cache,
+  ) {}
 
   createDraft(ownerId: string, dto: CreateEventDto) {
     const baseSlug = slugify(dto.title, {
@@ -240,75 +247,86 @@ export class EventsService {
   }
 
   async findPublicEvents(query: PublicEventsQueryDto) {
-    const now = new Date();
+    const cacheKey = `public-events:list:${JSON.stringify({
+      search: query.search?.trim().toLowerCase() ?? null,
+      dateFrom: query.dateFrom ?? null,
+      dateTo: query.dateTo ?? null,
+      participationPolicy: query.participationPolicy ?? null,
+      page: query.page,
+      limit: query.limit,
+    })}`;
 
-    const requestedFrom = query.dateFrom ? new Date(query.dateFrom) : null;
-    const effectiveDateFrom =
-      requestedFrom && requestedFrom > now ? requestedFrom : now;
+    return this.cacheManager.wrap(cacheKey, async () => {
+      const now = new Date();
 
-    const where: Prisma.EventWhereInput = {
-      status: EventStatus.PUBLISHED,
-      visibility: EventVisibility.PUBLIC,
-      startsAt: {
-        gte: effectiveDateFrom,
+      const requestedFrom = query.dateFrom ? new Date(query.dateFrom) : null;
+      const effectiveDateFrom =
+        requestedFrom && requestedFrom > now ? requestedFrom : now;
 
-        ...(query.dateTo && {
-          lte: new Date(query.dateTo),
+      const where: Prisma.EventWhereInput = {
+        status: EventStatus.PUBLISHED,
+        visibility: EventVisibility.PUBLIC,
+        startsAt: {
+          gte: effectiveDateFrom,
+
+          ...(query.dateTo && {
+            lte: new Date(query.dateTo),
+          }),
+        },
+
+        ...(query.search?.trim() && {
+          title: {
+            contains: query.search.trim(),
+            mode: 'insensitive',
+          },
         }),
-      },
 
-      ...(query.search?.trim() && {
-        title: {
-          contains: query.search.trim(),
-          mode: 'insensitive',
-        },
-      }),
+        ...(query.participationPolicy && {
+          participationPolicy: query.participationPolicy,
+        }),
+      };
 
-      ...(query.participationPolicy && {
-        participationPolicy: query.participationPolicy,
-      }),
-    };
+      const skip = (query.page - 1) * query.limit;
 
-    const skip = (query.page - 1) * query.limit;
-
-    const [items, total] = await this.prismaService.$transaction([
-      this.prismaService.event.findMany({
-        where,
-        orderBy: {
-          startsAt: 'asc',
-        },
-        skip,
-        take: query.limit,
-        select: {
-          title: true,
-          slug: true,
-          description: true,
-          startsAt: true,
-          endsAt: true,
-          timezone: true,
-          capacity: true,
-          participationPolicy: true,
-          owner: {
-            select: {
-              name: true,
+      const [items, total] = await this.prismaService.$transaction([
+        this.prismaService.event.findMany({
+          where,
+          orderBy: {
+            startsAt: 'asc',
+          },
+          skip,
+          take: query.limit,
+          select: {
+            title: true,
+            slug: true,
+            description: true,
+            startsAt: true,
+            endsAt: true,
+            timezone: true,
+            capacity: true,
+            participationPolicy: true,
+            owner: {
+              select: {
+                name: true,
+              },
             },
           },
-        },
-      }),
-      this.prismaService.event.count({
-        where,
-      }),
-    ]);
+        }),
+        this.prismaService.event.count({
+          where,
+        }),
+      ]);
 
-    return {
-      items,
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
-    };
+      return {
+        items,
+        pagination: {
+          page: query.page,
+          limit: query.limit,
+          total,
+          totalPages: Math.ceil(total / query.limit),
+        },
+      };
+    });
   }
 
   async findPublicBySlug(slug: string) {
