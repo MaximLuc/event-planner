@@ -30,6 +30,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { ApiTooManyRequestsResponse } from '@nestjs/swagger';
 
 const REFRESH_TOKEN_COOKIE = 'refresh_token';
 
@@ -46,6 +48,16 @@ export class AuthController {
   @ApiCreatedResponse({ description: 'User registered successfully' })
   @ApiBadRequestResponse({ description: 'Invalid registration data' })
   @ApiConflictResponse({ description: 'Email is already registered' })
+  @Throttle({
+    default: {
+      limit: 3,
+      ttl: 60_000,
+      blockDuration: 60_000,
+    },
+  })
+  @ApiTooManyRequestsResponse({
+    description: 'Too many registration attempts',
+  })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
@@ -57,6 +69,16 @@ export class AuthController {
     description: 'Access token returned; refresh token set in cookie',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid email or password' })
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: 60_000,
+      blockDuration: 60_000,
+    },
+  })
+  @ApiTooManyRequestsResponse({
+    description: 'Too many login attempts',
+  })
   async login(
     @Body() dto: LoginDto,
     @Req() request: Request,

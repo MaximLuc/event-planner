@@ -15,6 +15,8 @@ import { createAccessToken } from './helpers/auth.helper';
 import { createTestApp } from './helpers/create-test-app';
 import { cleanDatabase } from './helpers/database.helper';
 import { createTestUser } from './helpers/factories';
+import { cleanCache } from './helpers/cache.helper';
+import { cleanRateLimits } from './helpers/rate-limit.helper';
 
 type CreatePublishedEventOptions = {
   title?: string;
@@ -109,6 +111,8 @@ describe('Registrations (e2e)', () => {
 
   beforeEach(async () => {
     await cleanDatabase(prisma);
+    await cleanCache(app);
+    await cleanRateLimits(app);
   });
 
   afterAll(async () => {

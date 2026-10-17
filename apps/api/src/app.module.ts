@@ -9,6 +9,7 @@ import { EventsModule } from './events/events.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { RedisCacheModule } from './cache/redis-cache.module';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -40,6 +41,7 @@ import * as Joi from 'joi';
     RegistrationsModule,
     InvitationsModule,
     RedisCacheModule,
+    RateLimitModule,
   ],
 })
 export class AppModule {}

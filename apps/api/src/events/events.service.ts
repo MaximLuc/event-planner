@@ -18,6 +18,9 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 
+const PUBLIC_EVENTS_LIST_REVISION_KEY = 'public-events:list:revision';
+
+const PUBLIC_EVENTS_CACHE_TTL_MS = 60_000;
 @Injectable()
 export class EventsService {
   constructor(
@@ -25,6 +28,23 @@ export class EventsService {
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
   ) {}
+
+  private async getPublicEventsListRevision(): Promise<string> {
+    return (
+      (await this.cacheManager.get<string>(PUBLIC_EVENTS_LIST_REVISION_KEY)) ??
+      'initial'
+    );
+  }
+
+  private async invalidatePublicEventsList(): Promise<void> {
+    const newRevision = randomBytes(8).toString('hex');
+
+    await this.cacheManager.set(
+      PUBLIC_EVENTS_LIST_REVISION_KEY,
+      newRevision,
+      0,
+    );
+  }
 
   createDraft(ownerId: string, dto: CreateEventDto) {
     const baseSlug = slugify(dto.title, {
@@ -239,15 +259,23 @@ export class EventsService {
       );
     }
 
-    return this.prismaService.event.findUniqueOrThrow({
+    const publishedEvent = await this.prismaService.event.findUniqueOrThrow({
       where: {
         id: eventId,
       },
     });
+
+    if (publishedEvent.visibility === EventVisibility.PUBLIC) {
+      await this.invalidatePublicEventsList();
+    }
+
+    return publishedEvent;
   }
 
   async findPublicEvents(query: PublicEventsQueryDto) {
-    const cacheKey = `public-events:list:${JSON.stringify({
+    const revision = await this.getPublicEventsListRevision();
+
+    const cacheKey = `public-events:list:${revision}:${JSON.stringify({
       search: query.search?.trim().toLowerCase() ?? null,
       dateFrom: query.dateFrom ?? null,
       dateTo: query.dateTo ?? null,
@@ -256,46 +284,97 @@ export class EventsService {
       limit: query.limit,
     })}`;
 
-    return this.cacheManager.wrap(cacheKey, async () => {
-      const now = new Date();
+    return this.cacheManager.wrap(
+      cacheKey,
+      async () => {
+        const now = new Date();
 
-      const requestedFrom = query.dateFrom ? new Date(query.dateFrom) : null;
-      const effectiveDateFrom =
-        requestedFrom && requestedFrom > now ? requestedFrom : now;
+        const requestedFrom = query.dateFrom ? new Date(query.dateFrom) : null;
+        const effectiveDateFrom =
+          requestedFrom && requestedFrom > now ? requestedFrom : now;
 
-      const where: Prisma.EventWhereInput = {
-        status: EventStatus.PUBLISHED,
-        visibility: EventVisibility.PUBLIC,
-        startsAt: {
-          gte: effectiveDateFrom,
+        const where: Prisma.EventWhereInput = {
+          status: EventStatus.PUBLISHED,
+          visibility: EventVisibility.PUBLIC,
+          startsAt: {
+            gte: effectiveDateFrom,
 
-          ...(query.dateTo && {
-            lte: new Date(query.dateTo),
+            ...(query.dateTo && {
+              lte: new Date(query.dateTo),
+            }),
+          },
+
+          ...(query.search?.trim() && {
+            title: {
+              contains: query.search.trim(),
+              mode: 'insensitive',
+            },
           }),
-        },
 
-        ...(query.search?.trim() && {
-          title: {
-            contains: query.search.trim(),
-            mode: 'insensitive',
+          ...(query.participationPolicy && {
+            participationPolicy: query.participationPolicy,
+          }),
+        };
+
+        const skip = (query.page - 1) * query.limit;
+
+        const [items, total] = await this.prismaService.$transaction([
+          this.prismaService.event.findMany({
+            where,
+            orderBy: {
+              startsAt: 'asc',
+            },
+            skip,
+            take: query.limit,
+            select: {
+              title: true,
+              slug: true,
+              description: true,
+              startsAt: true,
+              endsAt: true,
+              timezone: true,
+              capacity: true,
+              participationPolicy: true,
+              owner: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          }),
+          this.prismaService.event.count({
+            where,
+          }),
+        ]);
+
+        return {
+          items,
+          pagination: {
+            page: query.page,
+            limit: query.limit,
+            total,
+            totalPages: Math.ceil(total / query.limit),
           },
-        }),
+        };
+      },
+      PUBLIC_EVENTS_CACHE_TTL_MS,
+    );
+  }
 
-        ...(query.participationPolicy && {
-          participationPolicy: query.participationPolicy,
-        }),
-      };
+  async findPublicBySlug(slug: string) {
+    const cacheKey = `public-events:detail:${slug}`;
 
-      const skip = (query.page - 1) * query.limit;
-
-      const [items, total] = await this.prismaService.$transaction([
-        this.prismaService.event.findMany({
-          where,
-          orderBy: {
-            startsAt: 'asc',
+    return this.cacheManager.wrap(
+      cacheKey,
+      async () => {
+        const event = await this.prismaService.event.findFirst({
+          where: {
+            slug,
+            status: EventStatus.PUBLISHED,
+            visibility: {
+              in: [EventVisibility.PUBLIC, EventVisibility.UNLISTED],
+            },
           },
-          skip,
-          take: query.limit,
           select: {
             title: true,
             slug: true,
@@ -311,54 +390,15 @@ export class EventsService {
               },
             },
           },
-        }),
-        this.prismaService.event.count({
-          where,
-        }),
-      ]);
+        });
 
-      return {
-        items,
-        pagination: {
-          page: query.page,
-          limit: query.limit,
-          total,
-          totalPages: Math.ceil(total / query.limit),
-        },
-      };
-    });
-  }
+        if (!event) {
+          throw new NotFoundException('Public event not found');
+        }
 
-  async findPublicBySlug(slug: string) {
-    const event = await this.prismaService.event.findFirst({
-      where: {
-        slug,
-        status: EventStatus.PUBLISHED,
-        visibility: {
-          in: [EventVisibility.PUBLIC, EventVisibility.UNLISTED],
-        },
+        return event;
       },
-      select: {
-        title: true,
-        slug: true,
-        description: true,
-        startsAt: true,
-        endsAt: true,
-        timezone: true,
-        capacity: true,
-        participationPolicy: true,
-        owner: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!event) {
-      throw new NotFoundException('Public event not found');
-    }
-
-    return event;
+      PUBLIC_EVENTS_CACHE_TTL_MS,
+    );
   }
 }

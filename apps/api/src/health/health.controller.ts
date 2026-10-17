@@ -8,7 +8,9 @@ import { PrismaService } from '../database/prisma/prisma.service';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
+import { SkipThrottle } from '@nestjs/throttler';
 
+@SkipThrottle({ default: true })
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {

@@ -16,6 +16,8 @@ import {
   createPublishedInviteOnlyEvent,
   createTestUser,
 } from './helpers/factories';
+import { cleanCache } from './helpers/cache.helper';
+import { cleanRateLimits } from './helpers/rate-limit.helper';
 
 type InvitationsListResponse = {
   items: Array<{
@@ -49,6 +51,8 @@ describe('Invitations (e2e)', () => {
 
   beforeEach(async () => {
     await cleanDatabase(prisma);
+    await cleanCache(app);
+    await cleanRateLimits(app);
   });
 
   afterAll(async () => {
