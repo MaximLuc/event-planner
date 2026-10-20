@@ -12,7 +12,7 @@ import { AuthService } from '../src/auth/auth.service';
 import { PrismaService } from '../src/database/prisma/prisma.service';
 import { cleanCache } from './helpers/cache.helper';
 import { createTestApp } from './helpers/create-test-app';
-import { cleanDatabase } from './helpers/database.helper';
+import { resetTestState } from './helpers/reset-test-state';
 import { cleanRateLimits } from './helpers/rate-limit.helper';
 
 const RATE_LIMIT_KEY_PATTERN = 'event-planner:rate-limit:*';
@@ -40,9 +40,7 @@ describe('Rate limiting (e2e)', () => {
   });
 
   beforeEach(async () => {
-    await cleanDatabase(prisma);
-    await cleanCache(app);
-    await cleanRateLimits(app);
+    await resetTestState(app);
   });
 
   afterEach(() => {

@@ -10,6 +10,9 @@ import { RegistrationsModule } from './registrations/registrations.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { RedisCacheModule } from './cache/redis-cache.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { QueueModule } from './queue/queue.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { MailModule } from './mail/mail.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -30,6 +33,12 @@ import * as Joi from 'joi';
           .positive()
           .default(2592000),
         REDIS_URL: Joi.string().uri().required(),
+        SMTP_HOST: Joi.string().required(),
+        SMTP_PORT: Joi.number().port().required(),
+        SMTP_SECURE: Joi.boolean().default(false),
+        MAIL_FROM: Joi.string()
+          .email({ tlds: { allow: false } })
+          .required(),
       }),
     }),
     HealthModule,
@@ -42,6 +51,9 @@ import * as Joi from 'joi';
     InvitationsModule,
     RedisCacheModule,
     RateLimitModule,
+    QueueModule,
+    NotificationsModule,
+    MailModule,
   ],
 })
 export class AppModule {}

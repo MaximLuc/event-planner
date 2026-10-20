@@ -16,11 +16,9 @@ import {
   ParticipationPolicy,
 } from '../src/generated/prisma/enums';
 import { createAccessToken } from './helpers/auth.helper';
-import { cleanCache } from './helpers/cache.helper';
 import { createTestApp } from './helpers/create-test-app';
-import { cleanDatabase } from './helpers/database.helper';
+import { resetTestState } from './helpers/reset-test-state';
 import { createTestUser } from './helpers/factories';
-import { cleanRateLimits } from './helpers/rate-limit.helper';
 
 type PublicEventResponse = {
   title: string;
@@ -72,9 +70,7 @@ describe('Redis cache (e2e)', () => {
   });
 
   beforeEach(async () => {
-    await cleanDatabase(prisma);
-    await cleanCache(app);
-    await cleanRateLimits(app);
+    await resetTestState(app);
   });
 
   afterEach(() => {

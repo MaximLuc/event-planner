@@ -15,12 +15,16 @@ import {
 import { RespondInvitationDto } from './dto/respond-invitation.dto/respond-invitation.dto';
 import { Prisma } from '../generated/prisma/client';
 import { EventInvitationsQueryDto } from './dto/event-invitations-query.dto/event-invitations-query.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const MAX_TRANSACTION_RETRIES = 3;
 
 @Injectable()
 export class InvitationsService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly notificationService: NotificationsService,
+  ) {}
 
   async invite(userId: string, eventId: string, dto: CreateInvitationDto) {
     const event = await this.prismaService.event.findUnique({
@@ -98,7 +102,7 @@ export class InvitationsService {
       ) {
         throw new ConflictException('Invitation already exists');
       }
-      return this.prismaService.eventInvitation.update({
+      const updateInvitation = await this.prismaService.eventInvitation.update({
         where: {
           id: existingInvitation.id,
         },
@@ -127,8 +131,12 @@ export class InvitationsService {
           },
         },
       });
+      await this.notificationService.enqueueInvitationNotification(
+        updateInvitation.id,
+      );
+      return updateInvitation;
     }
-    return this.prismaService.eventInvitation.create({
+    const invitation = await this.prismaService.eventInvitation.create({
       data: {
         eventId: event.id,
         invitedUserId: invitedUser.id,
@@ -154,6 +162,9 @@ export class InvitationsService {
         },
       },
     });
+
+    await this.notificationService.enqueueInvitationNotification(invitation.id);
+    return invitation;
   }
   async myInvitation(userId: string) {
     return this.prismaService.eventInvitation.findMany({

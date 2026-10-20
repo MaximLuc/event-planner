@@ -5,8 +5,7 @@ import type { App } from 'supertest/types';
 import { createTestApp } from './helpers/create-test-app';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import { cleanCache } from './helpers/cache.helper';
-import { cleanRateLimits } from './helpers/rate-limit.helper';
+import { resetTestState } from './helpers/reset-test-state';
 
 describe('Health (e2e)', () => {
   let app: INestApplication<App>;
@@ -18,8 +17,7 @@ describe('Health (e2e)', () => {
   });
 
   beforeEach(async () => {
-    await cleanCache(app);
-    await cleanRateLimits(app);
+    await resetTestState(app);
   });
 
   afterEach(() => {

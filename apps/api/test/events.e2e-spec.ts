@@ -10,11 +10,9 @@ import {
   ParticipationPolicy,
 } from '../src/generated/prisma/enums';
 import { createTestApp } from './helpers/create-test-app';
-import { cleanDatabase } from './helpers/database.helper';
+import { resetTestState } from './helpers/reset-test-state';
 import { createAccessToken } from './helpers/auth.helper';
 import { createTestUser } from './helpers/factories';
-import { cleanCache } from './helpers/cache.helper';
-import { cleanRateLimits } from './helpers/rate-limit.helper';
 
 type EventResponse = {
   id: string;
@@ -69,9 +67,7 @@ describe('Events (e2e)', () => {
   });
 
   beforeEach(async () => {
-    await cleanDatabase(prisma);
-    await cleanCache(app);
-    await cleanRateLimits(app);
+    await resetTestState(app);
   });
 
   afterAll(async () => {

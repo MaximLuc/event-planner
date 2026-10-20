@@ -6,9 +6,7 @@ import type { App } from 'supertest/types';
 import { PrismaService } from '../src/database/prisma/prisma.service';
 import { SystemRole } from '../src/generated/prisma/enums';
 import { createTestApp } from './helpers/create-test-app';
-import { cleanDatabase } from './helpers/database.helper';
-import { cleanCache } from './helpers/cache.helper';
-import { cleanRateLimits } from './helpers/rate-limit.helper';
+import { resetTestState } from './helpers/reset-test-state';
 
 type RegisterResponse = {
   id: string;
@@ -64,9 +62,7 @@ describe('Auth (e2e)', () => {
   });
 
   beforeEach(async () => {
-    await cleanDatabase(prisma);
-    await cleanCache(app);
-    await cleanRateLimits(app);
+    await resetTestState(app);
   });
 
   afterAll(async () => {

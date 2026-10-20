@@ -23,7 +23,9 @@ export async function createTestApp(): Promise<INestApplication<App>> {
     }),
   );
 
-  await app.init();
+  // One server per app: parallel Supertest requests must not close each other's
+  // implicitly created listener. Port 0 asks the OS for a free test-only port.
+  await app.listen(0, '127.0.0.1');
 
   return app;
 }
