@@ -12,7 +12,6 @@ import { RedisCacheModule } from './cache/redis-cache.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { QueueModule } from './queue/queue.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { MailModule } from './mail/mail.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -53,7 +52,6 @@ import * as Joi from 'joi';
     RateLimitModule,
     QueueModule,
     NotificationsModule,
-    MailModule,
   ],
 })
 export class AppModule {}
