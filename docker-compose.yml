@@ -10,13 +10,13 @@ services:
       POSTGRES_DB: event_planner
 
     ports: 
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
     volumes:
     - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ['CMD-SHELL','pg_isready -U postgres -d event_planner']
+      test: ["CMD-SHELL","pg_isready -U postgres -d event_planner"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - 6379:6379
+      - "127.0.0.1:6379:6379"
 
     volumes:
       - redis_data:/data
@@ -46,9 +46,95 @@ services:
     ports:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"
+    
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
+  migrate:
+    image: event-planner-migrations:local
 
+    build: 
+      context: ./apps/api
+      target: build
+
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/event_planner?schema=public"
+
+    command: ["pnpm","exec","prisma","migrate","deploy"]
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    restart: "no"
+
+  api:
+    image: event-planner-api:local
+
+    build:
+      context: ./apps/api
+      target: runtime
+
+    init: true
+
+    restart: unless-stopped
+
+    stop_grace_period: 30s
+
+    env_file: ./apps/api/.env
       
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/event_planner?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      MAIL_FROM: "no-reply@event-planner.test"
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+  worker:
+    image: event-planner-api:local
+
+    build:
+      context: ./apps/api
+      target: runtime
+
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/event_planner?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      MAIL_FROM: "no-reply@event-planner.test"
+
+    command: ["node", "dist/src/worker.js"]
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+
+
 volumes:
   postgres_data:
   redis_data:
