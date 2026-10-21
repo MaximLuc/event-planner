@@ -1,98 +1,208 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Event Planner API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Практическое руководство по разработке и обслуживанию бэкенда.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- [Описание проекта и быстрый запуск через Docker](../../README.md).
+- [Архитектура и технические решения](../../docs/architecture.md).
+- [Swagger после запуска API](http://localhost:3000/api/docs).
 
-## Description
+## Требования
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- Node.js 24.
+- pnpm 11.22.0 — та же версия используется в Dockerfile и CI.
+- Docker с Compose v2 и запущенным Docker daemon.
 
-## Project setup
+Если pnpm ещё не установлен:
 
 ```bash
-$ pnpm install
+npm install --global pnpm@11.22.0
 ```
 
-## Compile and run the project
+Ниже явно указано, откуда выполнять команды: из корня репозитория или из `apps/api`. Общего корневого pnpm workspace с фронтендом пока нет; зависимости API устанавливаются внутри `apps/api`.
+
+## Переменные окружения
+
+Локальный файл — `apps/api/.env`. Для нового клона создай его из [.env.example](.env.example) и заполни два разных случайных JWT-секрета. Существующий `.env` перезаписывать не нужно.
+
+| Переменная                | Значение для локальной разработки                                           | Назначение                                                        |
+| ------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `NODE_ENV`                | `development`                                                               | Режим приложения; в production refresh-cookie имеет флаг `Secure` |
+| `PORT`                    | `3000`                                                                      | HTTP-порт API; worker не открывает HTTP-порт                      |
+| `DATABASE_URL`            | `postgresql://postgres:postgres@localhost:5432/event_planner?schema=public` | Подключение Prisma к PostgreSQL                                   |
+| `JWT_ACCESS_SECRET`       | Собственный случайный секрет, минимум 32 символа                            | Подпись access token                                              |
+| `JWT_ACCESS_EXPIRES_IN`   | `15m`                                                                       | Срок действия access token                                        |
+| `JWT_REFRESH_SECRET`      | Другой случайный секрет, минимум 32 символа                                 | Подпись refresh token                                             |
+| `JWT_REFRESH_TTL_SECONDS` | `2592000`                                                                   | Срок refresh token и обновляемой сессии, в секундах               |
+| `REDIS_URL`               | `redis://localhost:6379`                                                    | Кэш, ограничения запросов и очередь BullMQ                        |
+| `SMTP_HOST`               | `127.0.0.1`                                                                 | Адрес SMTP Mailpit на хосте                                       |
+| `SMTP_PORT`               | `1025`                                                                      | SMTP-порт Mailpit                                                 |
+| `SMTP_SECURE`             | `false`                                                                     | Использование прямого TLS-соединения с SMTP                       |
+| `MAIL_FROM`               | `no-reply@event-planner.test`                                               | Отправитель уведомлений                                           |
+
+API и worker валидируют необходимые им настройки через `ConfigModule` и Joi. Worker не требует JWT-секретов или `PORT`.
+
+В Compose настройки из `environment` перекрывают одноимённые поля из `env_file`. Между контейнерами используются `postgres:5432`, `redis:6379`, `mailpit:1025`; программы на хосте используют опубликованные локальные порты. Не меняй адрес в локальном `.env` на `postgres`, если запускаешь Prisma Studio вне Docker.
+
+## Разработка на хосте
+
+### 1. Поднять только инфраструктуру
+
+Из корня репозитория, если до этого запускал полный Compose:
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+docker compose stop api worker
 ```
 
-## Run tests
+Это освобождает порт 3000 и исключает случайную обработку уведомлений вторым worker'ом.
+
+Затем запусти PostgreSQL, Redis и Mailpit:
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+docker compose up -d postgres redis mailpit
 ```
 
-## Deployment
+Проверь готовность через `docker compose ps`. Миграционный сервис в этом варианте не запускается автоматически: применим миграции на следующем шаге.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### 2. Установить зависимости и подготовить Prisma
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Из `apps/api`, с заполненным `.env`:
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+pnpm install --frozen-lockfile
+pnpm exec prisma generate
+pnpm exec prisma migrate deploy
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+`generate` создаёт типизированный клиент по схеме и не применяет миграции. `migrate deploy` применяет существующие миграции к БД, но не создаёт новые.
 
-## Resources
+Не копируй `node_modules`, `dist` и сгенерированный Prisma Client между Windows, macOS и Linux. Устанавливай зависимости и генерируй клиент в нужном окружении.
 
-Check out a few resources that may come in handy when working with NestJS:
+### 3. Запустить приложение
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Для разработки только HTTP-части:
 
-## Support
+```bash
+pnpm start:dev
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Для проверки API и отдельного worker сначала выполни одну общую сборку:
 
-## Stay in touch
+```bash
+pnpm build
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Затем из `apps/api` в двух терминалах:
 
-## License
+```bash
+pnpm start:prod
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```bash
+pnpm start:worker
+```
+
+Название `start:prod` означает запуск скомпилированного JavaScript без watch. Само по себе оно не меняет `NODE_ENV`: режим берётся из окружения. Не запускай два Nest watch-процесса, перезаписывающих общий `dist`. После изменения worker-кода в этом варианте останови процессы, пересобери проект и запусти их снова.
+
+## Prisma и БД
+
+Все команды раздела выполняются из `apps/api`.
+
+```bash
+# Проверить схему и создать актуальный Prisma Client.
+pnpm exec prisma validate
+pnpm exec prisma generate
+
+# Открыть интерфейс для просмотра данных.
+pnpm exec prisma studio
+```
+
+Studio выведет адрес в терминале. Подключение берётся из `DATABASE_URL` через `prisma.config.ts`. Интерфейс позволяет не только читать, но и изменять данные — используй его внимательно.
+
+После изменения схемы при разработке создай новую миграцию, заменив имя в примере на описание своего изменения:
+
+```bash
+pnpm exec prisma migrate dev --name describe_your_change
+pnpm exec prisma generate
+```
+
+`migrate dev` используется только для разработки. Если команда неожиданно предлагает сбросить БД, не подтверждай сброс до выяснения причины. Файлы миграций добавляются в Git; `src/generated/prisma` — нет.
+
+В Docker миграции выполняет отдельный сервис `migrate` из этапа `build`, где доступна Prisma CLI. После добавления миграции обычный цикл запуска из корня:
+
+```bash
+docker compose up --build -d
+docker compose logs --tail 100 migrate
+```
+
+## Тесты и проверки
+
+Из `apps/api`, после установки зависимостей и генерации Prisma Client:
+
+```bash
+pnpm exec eslint src test --max-warnings=0
+pnpm exec tsc --project test/tsconfig.json
+pnpm build
+pnpm test:e2e
+```
+
+Для запуска одного файла:
+
+```bash
+pnpm test:e2e --runTestsByPath test/notifications.e2e-spec.ts
+```
+
+### Как устроены e2e-тесты
+
+- `global-setup.ts` запускает отдельные PostgreSQL, Redis и Mailpit на динамических портах, задаёт тестовые переменные и применяет миграции.
+- `create-test-app.ts` поднимает API и `NotificationsWorkerModule` в одном тестовом процессе. Это не отменяет раздельный запуск в обычном окружении.
+- `resetTestState()` приостанавливает очередь, дожидается активной задачи, затем очищает очередь, Mailpit, БД, кэш и счётчики запросов.
+- Jest запускает набор последовательно: общие контейнеры рассчитаны на `maxWorkers: 1`. Для параллельных наборов потребуется отдельная изоляция данных.
+- `global-teardown.ts` останавливает временные контейнеры. Docker Compose проекта для тестов не нужен.
+
+Проверяются авторизация и cookie, ротация сессий, права владельца, версии событий, публичная витрина, регистрации, приглашения, конкурентное занятие мест, кэш, общие ограничения запросов и доставка уведомлений.
+
+Тесты уведомлений используют реальные Redis/BullMQ и SMTP Mailpit. В сценариях сбоев отдельные вызовы намеренно подменяются для проверки retries. Успех ожидается по состоянию конкретной задачи и содержимому Mailpit, а не по фиксированной задержке.
+
+### Линтер и форматирование
+
+Проверять нужно исходники и тесты. `dist`, `coverage` и `src/generated/prisma` исключены в `eslint.config.mjs`.
+
+```bash
+# Проверка без изменения файлов — как в CI.
+pnpm exec eslint src test --max-warnings=0
+
+# Автоматическое исправление поддерживаемых проблем в своём коде.
+pnpm exec eslint src test --fix
+```
+
+Скрипт `pnpm lint` уже содержит `--fix` и меняет файлы; для CI используется отдельная команда без исправлений. Не исправляй сгенерированный Prisma Client вручную и не добавляй результаты сборки в TypeScript-проект ради устранения ошибок линтера.
+
+## Swagger и работа с токенами
+
+Swagger доступен по [http://localhost:3000/api/docs](http://localhost:3000/api/docs), общий префикс API — `/api/v1`.
+
+- В `Authorize → access-token` вставляется только access token. Swagger добавляет `Authorization: Bearer ...`.
+- Login возвращает access token и данные пользователя в JSON, а refresh token устанавливает в HttpOnly-cookie `refresh_token`.
+- Refresh и обычный logout используют cookie, а не refresh token в JSON-запросе.
+- Cookie имеет `path=/api/v1/auth`, `sameSite=lax`, `httpOnly=true`; при `NODE_ENV=production` также `secure=true`.
+- Смена пользователя в Swagger требует смены Bearer-токена. Cookie при этом может принадлежать последнему вошедшему пользователю: для разных аккаунтов удобнее отдельные браузерные профили.
+
+Для будущего фронтенда CORS сейчас разрешает `http://localhost:5173` с credentials. Запросам, работающим с refresh-cookie из браузера, потребуется `credentials: 'include'`. Для production отдельно настраиваются HTTPS, origins и cookie.
+
+## Частые проблемы
+
+| Симптом                                 | Что проверить                                                                           |
+| --------------------------------------- | --------------------------------------------------------------------------------------- |
+| `EADDRINUSE` на 3000                    | Не запущен ли API одновременно на хосте и в Docker                                      |
+| Ошибка соединения с PostgreSQL/Redis    | Готовность контейнера и адрес: `localhost` на хосте, имя сервиса внутри Compose         |
+| Приглашение создано, но письма нет      | Работает ли worker; его логи; статус приглашения и будущая дата опубликованного события |
+| `migrate` имеет `Exited (0)`            | Это штатное успешное завершение одноразового сервиса                                    |
+| `409` при редактировании события        | Актуален ли `expectedVersion`; перечитай событие и осознанно повтори изменение          |
+| `409` при повторном приглашении         | Приглашение уже `PENDING`/`ACCEPTED` либо есть активная регистрация                     |
+| `401` в Swagger                         | Access token мог истечь; выполни login/refresh и обнови Authorize                       |
+| `429`                                   | Сработало ограничение запросов; дождись окончания блокировки                            |
+| ESLint сообщает parsing errors в `dist` | Проверь исключения и запускай линтер для `src test`                                     |
+| В CI ошибки generated Prisma            | Закоммичено ли исключение `src/generated/prisma/**`                                     |
+| Тесты не могут создать контейнер        | Запущен ли Docker daemon и доступен ли он текущему пользователю                         |
+
+Mailpit — локальный приёмник писем, а не проверка доставки во внешний почтовый ящик. Сообщение `email accepted by SMTP` означает принятие письма SMTP-сервером, а не прочтение пользователем.
