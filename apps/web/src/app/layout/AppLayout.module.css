@@ -1,0 +1,27 @@
+.navItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 4px;
+  border-radius: 8px;
+  color: var(--color-bg);
+  font-size: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background-color: #104d7c;
+}
+
+.navItem.active {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
